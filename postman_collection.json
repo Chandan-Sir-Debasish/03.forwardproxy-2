@@ -1,0 +1,263 @@
+{
+	"info": {
+		"_postman_id": "9a38f321-df10-410a-81a2-cb3918a5bc79",
+		"name": "Nginx Forward Proxy Tests",
+		"description": "Postman collection to test the Nginx Forward Proxy configuration including IP-based access control and domain-based content filtering.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Port 8888 - Access Control",
+			"item": [
+				{
+					"name": "ACL Blocked - Unauthorized Request from Host",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 403 Forbidden\", function () {",
+									"    pm.response.to.have.status(403);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "example.com",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8888/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8888",
+							"path": [
+								""
+							]
+						},
+						"description": "Sends a request to port 8888 representing a target host. Since the host machine's IP is not in Nginx's allow list, the proxy should return a 403 Forbidden."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Port 8889 - Content Filtering",
+			"item": [
+				{
+					"name": "Allowed Domain - example.com",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "example.com",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								""
+							]
+						},
+						"description": "Sends an HTTP request to the content filtering proxy targeting example.com. Since it is not blocked, it should return 200 OK."
+					},
+					"response": []
+				},
+				{
+					"name": "Blocked Domain - facebook.com",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 403 Forbidden\", function () {",
+									"    pm.response.to.have.status(403);",
+									"});",
+									"pm.test(\"Body contains social media block message\", function () {",
+									"    pm.expect(pm.response.text()).to.include(\"Access to social media is blocked by company policy\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "facebook.com",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								""
+							]
+						},
+						"description": "Sends a request targeting facebook.com. The proxy should intercept this and block it with a 403 policy violation message."
+					},
+					"response": []
+				},
+				{
+					"name": "Blocked Subdomain - sub.facebook.com",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 403 Forbidden\", function () {",
+									"    pm.response.to.have.status(403);",
+									"});",
+									"pm.test(\"Body contains social media block message\", function () {",
+									"    pm.expect(pm.response.text()).to.include(\"Access to social media is blocked by company policy\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "sub.facebook.com",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								""
+							]
+						},
+						"description": "Sends a request targeting sub.facebook.com. The proxy should match subdomains and return a 403."
+					},
+					"response": []
+				},
+				{
+					"name": "Blocked Video Domain - netflix.com",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 403 Forbidden\", function () {",
+									"    pm.response.to.have.status(403);",
+									"});",
+									"pm.test(\"Body contains video streaming block message\", function () {",
+									"    pm.expect(pm.response.text()).to.include(\"Video streaming is blocked during work hours\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "netflix.com",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								""
+							]
+						},
+						"description": "Sends a request targeting netflix.com. The proxy should intercept and block with a video streaming block message."
+					},
+					"response": []
+				},
+				{
+					"name": "Allowed Substring Domain - myfacebook.com",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is not 403 Forbidden\", function () {",
+									"    pm.expect(pm.response.code).to.not.equal(403);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "myfacebook.com",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								""
+							]
+						},
+						"description": "Sends a request targeting myfacebook.com. The proxy should NOT block it with a 403, demonstrating that boundary-safe regex patterns are working correctly."
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}

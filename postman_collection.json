@@ -1,8 +1,8 @@
 {
 	"info": {
 		"_postman_id": "9a38f321-df10-410a-81a2-cb3918a5bc79",
-		"name": "Nginx Forward Proxy Tests",
-		"description": "Postman collection to test the Nginx Forward Proxy configuration including IP-based access control and domain-based content filtering.",
+		"name": "Nginx Forward Proxy Extended Tests",
+		"description": "Extended Postman collection to test Nginx Forward Proxy functionality: access controls, content filtering, query parameter routing, header forwarding, and HTTP POST body handling.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -51,7 +51,7 @@
 			]
 		},
 		{
-			"name": "Port 8889 - Content Filtering",
+			"name": "Port 8889 - Content Filtering Basic",
 			"item": [
 				{
 					"name": "Allowed Domain - example.com",
@@ -217,6 +217,53 @@
 						"description": "Sends a request targeting netflix.com. The proxy should intercept and block with a video streaming block message."
 					},
 					"response": []
+				}
+			]
+		},
+		{
+			"name": "Port 8889 - Boundary and Case Sensitivity Tests",
+			"item": [
+				{
+					"name": "Case-Insensitive Blocking - FACEBOOK.COM",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 403 Forbidden\", function () {",
+									"    pm.response.to.have.status(403);",
+									"});",
+									"pm.test(\"Body contains social media block message\", function () {",
+									"    pm.expect(pm.response.text()).to.include(\"Access to social media is blocked by company policy\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "FACEBOOK.COM",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								""
+							]
+						},
+						"description": "Tests case-insensitivity (~* rule). FACEBOOK.COM should be blocked just like facebook.com."
+					},
+					"response": []
 				},
 				{
 					"name": "Allowed Substring Domain - myfacebook.com",
@@ -254,6 +301,205 @@
 							]
 						},
 						"description": "Sends a request targeting myfacebook.com. The proxy should NOT block it with a 403, demonstrating that boundary-safe regex patterns are working correctly."
+					},
+					"response": []
+				},
+				{
+					"name": "Allowed Substring Domain - netflixguide.com",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is not 403 Forbidden\", function () {",
+									"    pm.expect(pm.response.code).to.not.equal(403);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "netflixguide.com",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								""
+							]
+						},
+						"description": "Sends a request targeting netflixguide.com. The proxy should NOT block it with a 403, confirming substring domains are safe."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Port 8889 - Protocol Forwarding and Payload Tests",
+			"item": [
+				{
+					"name": "Query Parameter Preservation",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Query parameters are preserved in upstream request\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.args.testParam).to.equal(\"active\");",
+									"    pm.expect(jsonData.args.user).to.equal(\"teacher\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "httpbin.org",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/get?testParam=active&user=teacher",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								"get"
+							],
+							"query": [
+								{
+									"key": "testParam",
+									"value": "active"
+								},
+								{
+									"key": "user",
+									"value": "teacher"
+								}
+							]
+						},
+						"description": "Tests that query strings are forwarded transparently by the proxy to httpbin.org/get."
+					},
+					"response": []
+				},
+				{
+					"name": "Request Header Forwarding",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Custom header is forwarded to upstream\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.headers['X-Academic-Institution']).to.equal(\"DevOps-Lab-University\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Host",
+								"value": "httpbin.org",
+								"type": "text"
+							},
+							{
+								"key": "X-Academic-Institution",
+								"value": "DevOps-Lab-University",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/headers",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								"headers"
+							]
+						},
+						"description": "Tests that custom HTTP headers are transparently forwarded to the destination server."
+					},
+					"response": []
+				},
+				{
+					"name": "POST Request Body Payload Forwarding",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200 OK\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"POST payload is preserved and returned\", function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.json.testKey).to.equal(\"testValue\");",
+									"    pm.expect(jsonData.json.valid).to.equal(true);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Host",
+								"value": "httpbin.org",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"testKey\": \"testValue\",\n    \"valid\": true\n}"
+						},
+						"url": {
+							"raw": "http://{{proxyHost}}:8889/post",
+							"protocol": "http",
+							"host": [
+								"{{proxyHost}}"
+							],
+							"port": "8889",
+							"path": [
+								"post"
+							]
+						},
+						"description": "Tests that HTTP POST request bodies are forwarded intact to the upstream server."
 					},
 					"response": []
 				}

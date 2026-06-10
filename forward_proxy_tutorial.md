@@ -82,39 +82,109 @@ graph LR
 
 ---
 
-## Lesson 3: Transport Protocol Mechanics (GET vs. CONNECT)
+## Lesson 3: Deep Dive into Forward Proxy Architecture
+
+To understand forward proxying in depth, we must examine the network topology and the step-by-step request-response flow for both HTTP and HTTPS traffic.
+
+### Network Topology Diagram
+
+The following diagram illustrates the network isolation in this project. The client containers (`client1` and `client2`) are placed inside a private subnet and have no default route directly to the public internet. All outbound internet traffic must route through the `nginx-proxy` container, which acts as the gateway.
+
+```mermaid
+graph TD
+    subgraph "Host Machine"
+        HostInterface["Host Net Interface"]
+    end
+
+    subgraph "Docker Bridge Network (proxy-network: 172.20.0.0/16)"
+        Gateway["Gateway (172.20.0.1)"]
+        DNS["Docker DNS (127.0.0.11)"]
+        
+        subgraph "Allowed Clients Subnet"
+            C1["Client 1 (172.20.0.10)"]
+            C2["Client 2 (172.20.0.11)"]
+        end
+
+        subgraph "Nginx Proxy Service"
+            Proxy["nginx-proxy (172.20.0.2)"]
+        end
+    end
+
+    subgraph "External Internet"
+        Target["httpbin.org"]
+    end
+
+    C1 -->|Forward request| Proxy
+    C2 -->|Forward request| Proxy
+    Proxy -->|Local DNS Query| DNS
+    DNS -->|Upstream DNS Resolution| Gateway
+    Proxy -->|HTTP Forwarded Session| Gateway
+    Gateway -->|NAT routing| HostInterface
+    HostInterface -->|Public Outbound| Target
+```
+
+---
+
+## Lesson 4: Transport Protocol Mechanics (GET vs. CONNECT)
 
 Forward proxies handle standard HTTP (unencrypted) and HTTPS (encrypted) traffic differently.
 
 ### 1. HTTP Forwarding (GET/POST Proxying)
 For unencrypted HTTP requests, the proxy can inspect and modify request headers and payloads.
 - The client establishes a TCP connection to the proxy port (e.g., 8888).
-- The client formats the HTTP request using the absolute URL of the target resource:
-  ```http
-  GET http://example.com/index.html HTTP/1.1
-  Host: example.com
-  User-Agent: Client/1.0
-  ```
+- The client formats the HTTP request using the absolute URL of the target resource.
 - The proxy parses the absolute URL, verifies that the target domain is permitted, establishes a separate connection to the host, retrieves the content, and passes the HTTP response headers and body back to the client.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client Container (172.20.0.10)
+    participant Proxy as Nginx Forward Proxy (172.20.0.2)
+    participant DNS as Docker Resolver (127.0.0.11)
+    participant Target as External Host (httpbin.org)
+
+    Client->>Proxy: TCP Connection established on Port 8888
+    Client->>Proxy: HTTP GET http://httpbin.org/get HTTP/1.1
+    Note over Proxy: Parse Host header (httpbin.org)
+    Proxy->>DNS: Resolve DNS for httpbin.org (UDP Port 53)
+    DNS-->>Proxy: Resolve IP (e.g., 34.223.124.45)
+    Proxy->>Target: Establish TCP Connection on Port 80
+    Proxy->>Target: HTTP GET /get HTTP/1.1
+    Target-->>Proxy: HTTP/1.1 200 OK (Response Payload)
+    Proxy-->>Client: HTTP/1.1 200 OK (Forwarded Payload)
+```
 
 ### 2. HTTPS Forwarding (CONNECT Tunneling)
 For encrypted HTTPS traffic, the proxy cannot decrypt the transmission without dedicated SSL-inspection certificates. Instead, it acts as a blind TCP tunnel using the HTTP CONNECT method.
-- The client initiates connection by sending a plain-text CONNECT header to the proxy:
-  ```http
-  CONNECT example.com:443 HTTP/1.1
-  Host: example.com:443
-  ```
-- The proxy reads the target host (example.com) to evaluate the blocklist.
-- If allowed, the proxy establishes a raw TCP socket connection to example.com on port 443.
-- The proxy returns a confirmation to the client:
-  ```http
-  HTTP/1.1 200 Connection Established
-  ```
+- The client initiates connection by sending a plain-text CONNECT header to the proxy.
+- The proxy reads the target host to evaluate the blocklist.
+- If allowed, the proxy establishes a raw TCP socket connection to the target on port 443.
+- The proxy returns a confirmation to the client.
 - From this point, the proxy operates as a bi-directional pipe, routing raw TCP bytes back and forth. The TLS handshake and subsequent payload encryption take place directly between the client and target server, keeping the data confidential from the proxy.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as Client Container (172.20.0.10)
+    participant Proxy as Nginx Forward Proxy (172.20.0.2)
+    participant Target as External Host (httpbin.org)
+
+    Client->>Proxy: TCP Connection established on Port 8888
+    Client->>Proxy: HTTP CONNECT httpbin.org:443 HTTP/1.1
+    Note over Proxy: Parse host (httpbin.org) and port (443)
+    Proxy->>Target: Establish TCP Connection on Port 443
+    Proxy-->>Client: HTTP/1.1 200 Connection Established
+    Note over Client,Target: Proxy acts as a raw TCP tunnel
+    Client->>Target: Client Hello (Start TLS Handshake)
+    Target-->>Client: Server Hello & Certificate Exchange
+    Note over Client,Target: TLS Handshake Completed (Encrypted session)
+    Client->>Target: Encrypted HTTPS GET /user-agent
+    Target-->>Client: Encrypted HTTPS Response
+```
 
 ---
 
-## Lesson 4: Deep Dive into Nginx Configuration
+## Lesson 5: In-Depth Nginx Configuration
 
 Let us look at how the configuration in `nginx/nginx.conf` translates into these architectural patterns.
 
@@ -142,7 +212,7 @@ Using boundary-safe matching (`(^|\.)` at the start and `(:|$)` at the end) prev
 
 ---
 
-## Lesson 5: Student Review Questions & Challenges
+## Lesson 6: Student Review Questions & Challenges
 
 ### Review Questions
 1. Why is it important to use `127.0.0.11` as the DNS resolver when running Nginx as a forward proxy inside a Docker container?

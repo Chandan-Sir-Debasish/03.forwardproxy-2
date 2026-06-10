@@ -48,7 +48,7 @@ This scenario verifies that Nginx resolves internal container hostnames within t
 
 ---
 
-## Scenario 3: Domain-Based Content Filtering (Port 8889)
+## Scenario 3: Domain-Based Content Filtering Basic Checks (Port 8889)
 
 This scenario verifies that Nginx intercepts and blocks specific domain categories while permitting non-blacklisted traffic.
 
@@ -76,10 +76,54 @@ This scenario verifies that Nginx intercepts and blocks specific domain categori
     ```
 *   **Expected Behavior:** Request is intercepted. Nginx returns HTTP 403 Forbidden with policy block body.
 
-### Test Case 3.4: Accessing a Domain with Keyword Substring (myfacebook.com)
-*   **Description:** Validate that domains containing "facebook.com" as a substring but not representing the exact target domain are permitted.
+---
+
+## Scenario 4: Boundary and Case Sensitivity Verification (Port 8889)
+
+This scenario validates the boundaries of regex patterns to ensure case-insensitivity works and false positive domain blockings are prevented.
+
+### Test Case 4.1: Case Insensitivity Verification (FACEBOOK.COM)
+*   **Description:** Validate that blocking is case-insensitive.
+*   **Command:**
+    ```bash
+    docker compose exec client1 curl -i -x http://172.20.0.2:8889 http://FACEBOOK.COM
+    ```
+*   **Expected Behavior:** The request is blocked and returns HTTP 403 Forbidden because of the case-insensitive regex operator (`~*`).
+
+### Test Case 4.2: Domain Boundary Protection (myfacebook.com)
+*   **Description:** Validate that allowed domains containing keyword substrings are not blocked.
 *   **Command:**
     ```bash
     docker compose exec client1 curl -i -x http://172.20.0.2:8889 http://myfacebook.com
     ```
-*   **Expected Behavior:** Request is permitted by Nginx (not blocked with 403). Nginx attempts to contact the destination server.
+*   **Expected Behavior:** Nginx does not match `myfacebook.com` against `facebook.com` because it lacks a dot boundary (`.facebook.com`) or start of line boundary (`facebook.com`). The request is allowed, forwarding to the destination.
+
+---
+
+## Scenario 5: Transparent Protocol Forwarding Verification (Port 8889)
+
+This scenario validates that Nginx preserves and forwards query parameters, request headers, and POST payloads intact to the destination.
+
+### Test Case 5.1: Query Parameter Preservation
+*   **Description:** Validate that query parameters are forwarded unmodified.
+*   **Command:**
+    ```bash
+    docker compose exec client1 curl -s -x http://172.20.0.2:8889 "http://httpbin.org/get?testParam=active&user=teacher"
+    ```
+*   **Expected Behavior:** Nginx proxies the request to httpbin.org/get preserving the parameters, which are echoed back in the JSON body under `"args"`.
+
+### Test Case 5.2: Request Header Forwarding
+*   **Description:** Validate that custom HTTP headers are forwarded unmodified.
+*   **Command:**
+    ```bash
+    docker compose exec client1 curl -s -x http://172.20.0.2:8889 -H "X-Academic-Institution: DevOps-Lab-University" http://httpbin.org/headers
+    ```
+*   **Expected Behavior:** Nginx proxies the headers, and the response from httpbin.org/headers echoes the custom header in the JSON body under `"headers"`.
+
+### Test Case 5.3: HTTP POST Body Payload Forwarding
+*   **Description:** Validate that HTTP POST bodies are preserved.
+*   **Command:**
+    ```bash
+    docker compose exec client1 curl -s -x http://172.20.0.2:8889 -X POST -H "Content-Type: application/json" -d '{"testKey":"testValue"}' http://httpbin.org/post
+    ```
+*   **Expected Behavior:** Nginx forwards the payload, and the response from httpbin.org/post echoes the JSON payload in the response body.

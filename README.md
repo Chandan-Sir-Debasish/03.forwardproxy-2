@@ -49,7 +49,7 @@ graph TD
     %% Interactions
     C1 -->|HTTP requests| P8888
     C2 -->|HTTP requests| P8888
-    HostClient -->|Denied by ACL (403)| P8888
+    HostClient -->|Denied by ACL 403| P8888
     
     C1 -->|HTTP requests| P8889
     
@@ -62,7 +62,7 @@ graph TD
     
     %% Content Filter evaluation
     P8889 -->|If allowed domain| AllowedDest
-    P8889 --x|If facebook.com (403 Blocked)| BlockedSocial
+    P8889 --x|If facebook.com 403 Blocked| BlockedSocial
 ```
 
 ---
